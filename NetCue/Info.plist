@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>NetCue 需要控制其他应用程序的启动和退出，以便在切换网络场景时自动管理应用。</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>SMPrivilegedExecutables</key>
+	<dict>
+		<key>studio.slippindylan.BrewKit.NetCue.helper</key>
+		<string>identifier "studio.slippindylan.BrewKit.NetCue.helper" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: slippindylan@sent.com (K7623V57QS)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+	</dict>
+</dict>
+</plist>

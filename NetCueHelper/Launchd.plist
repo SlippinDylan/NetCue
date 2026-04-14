@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>studio.slippindylan.BrewKit.NetCue.helper</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Library/PrivilegedHelperTools/studio.slippindylan.BrewKit.NetCue.helper</string>
+	</array>
+	<key>MachServices</key>
+	<dict>
+		<key>studio.slippindylan.BrewKit.NetCue.helper</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
