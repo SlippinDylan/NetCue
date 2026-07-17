@@ -18,6 +18,7 @@ import Foundation
 /// - 应用控制场景 (NetworkScene)
 /// - DNS 控制场景 (DNSScene)
 /// - API Key 配置
+/// - Mihomo 配置 (MihomoConfig)
 ///
 /// ## 文件格式
 /// - 内部格式：JSON
@@ -50,6 +51,11 @@ struct NetCueExportData: Codable {
     /// API Key 配置
     let apiKeys: APIKeyExportData
 
+    // MARK: - Mihomo
+
+    /// Mihomo 配置（内核路径、关联应用等）
+    let mihomoConfig: MihomoConfig
+
     // MARK: - Initialization
 
     /// 创建导出数据（使用当前配置）
@@ -58,10 +64,12 @@ struct NetCueExportData: Codable {
     ///   - appControlScenes: 应用控制场景列表
     ///   - dnsControlScenes: DNS 控制场景列表
     ///   - apiKeys: API Key 配置
+    ///   - mihomoConfig: Mihomo 配置
     init(
         appControlScenes: [NetworkScene],
         dnsControlScenes: [DNSScene],
-        apiKeys: APIKeyExportData
+        apiKeys: APIKeyExportData,
+        mihomoConfig: MihomoConfig
     ) {
         self.version = Self.currentVersion
         self.exportedAt = Date()
@@ -70,12 +78,26 @@ struct NetCueExportData: Codable {
         self.appControlScenes = appControlScenes
         self.dnsControlScenes = dnsControlScenes
         self.apiKeys = apiKeys
+        self.mihomoConfig = mihomoConfig
+    }
+
+    /// 自定义解码：兼容 version 1 导出文件（缺少 mihomoConfig 字段）
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        exportedAt = try container.decode(Date.self, forKey: .exportedAt)
+        appName = try container.decode(String.self, forKey: .appName)
+        appVersion = try container.decode(String.self, forKey: .appVersion)
+        appControlScenes = try container.decode([NetworkScene].self, forKey: .appControlScenes)
+        dnsControlScenes = try container.decode([DNSScene].self, forKey: .dnsControlScenes)
+        apiKeys = try container.decode(APIKeyExportData.self, forKey: .apiKeys)
+        mihomoConfig = try container.decodeIfPresent(MihomoConfig.self, forKey: .mihomoConfig) ?? .default
     }
 
     // MARK: - Version
 
     /// 当前导出格式版本
-    static let currentVersion = 1
+    static let currentVersion = 2
 }
 
 // MARK: - API Key Export Data

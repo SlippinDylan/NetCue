@@ -39,10 +39,4 @@ class MihomoConfigService {
         }
     }
 
-    /// 重置为默认配置
-    func resetToDefault() {
-        AppLogger.debug("重置 Mihomo 配置为默认值")
-        userDefaults.removeObject(forKey: configKey)
-        AppLogger.info("Mihomo 配置已重置")
-    }
 }

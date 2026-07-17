@@ -21,7 +21,7 @@ import Compression
 /// let service = MihomoDownloadService()
 /// let kernelPath = try await service.downloadLatestKernel(
 ///     filenameTemplate: "mihomo-darwin-arm64-alpha-smart",
-///     targetFilename: "com.metacubex.ClashX.ProxyConfigHelper.meta"
+///     targetFilename: "mihomo"
 /// ) { progress in
 ///     print("下载进度: \(progress * 100)%")
 /// }
@@ -101,7 +101,7 @@ final class MihomoDownloadService: NSObject {
     /// - Parameters:
     ///   - releasesURL: GitHub Releases 页面 URL（例如：https://github.com/vernesong/mihomo/releases）
     ///   - filenameTemplate: 内核文件名模板（例如：mihomo-darwin-arm64-alpha-smart）
-    ///   - targetFilename: 目标文件名（例如：com.metacubex.ClashX.ProxyConfigHelper.meta）
+    ///   - targetFilename: 目标文件名（通常取自当前配置的内核文件路径）
     ///   - progressHandler: 下载进度回调（0.0 ~ 1.0）
     /// - Returns: 下载并解压后的内核文件路径
     /// - Throws: MihomoDownloadError

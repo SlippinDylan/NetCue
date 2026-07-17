@@ -16,6 +16,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(NetworkMonitor.self) private var networkMonitor
+    @Environment(MihomoViewModel.self) private var mihomoViewModel
     @State private var dnsManager = DNSManager.shared
     @State private var permissionManager = PermissionManager.shared
     @State private var apiKeyManager = APIKeyManager.shared
@@ -32,6 +33,9 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 24) {
                 // 通用设置
                 generalSettingsSection
+
+                // Mihomo 关联应用
+                mihomoHostAppSection
 
                 // IP 质量检测 API 配置
                 apiKeySettingsSection
@@ -59,7 +63,7 @@ struct SettingsView: View {
             }
         } message: {
             if let data = importedData {
-                Text("将导入 \(data.appControlScenes.count) 个应用控制场景、\(data.dnsControlScenes.count) 个 DNS 控制场景和 API Key 配置。\n\n此操作将覆盖现有配置，是否继续？")
+                Text("将导入 \(data.appControlScenes.count) 个应用控制场景、\(data.dnsControlScenes.count) 个 DNS 控制场景、API Key 配置以及 Mihomo 内核配置。\n\n此操作将覆盖现有配置，是否继续？")
             }
         }
     }
@@ -102,6 +106,63 @@ struct SettingsView: View {
                 icon: "gearshape",
                 iconColor: .gray,
                 description: "应用基本行为"
+            )
+        }
+    }
+
+    // MARK: - Mihomo Host App Section
+
+    private var mihomoHostAppSection: some View {
+        GroupBox {
+            HStack(spacing: 16) {
+                // 左侧：当前关联状态
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("关联你正在使用的 Clash/Mihomo 客户端，用于在替换内核前检测该应用是否正在运行。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: mihomoViewModel.config.hasAssociatedApp ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(mihomoViewModel.config.hasAssociatedApp ? .green : .orange)
+                            .font(.system(size: 12))
+                        Text(mihomoViewModel.config.hasAssociatedApp ? mihomoViewModel.config.appDisplayName : "未关联任何应用")
+                            .font(.caption)
+                            .foregroundStyle(mihomoViewModel.config.hasAssociatedApp ? Color.green : Color.orange)
+                    }
+
+                    if mihomoViewModel.config.hasAssociatedApp {
+                        Text(mihomoViewModel.config.appBundleIdentifier)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // 右侧按钮
+                HStack(spacing: 8) {
+                    if mihomoViewModel.config.hasAssociatedApp {
+                        Button("取消关联") {
+                            mihomoViewModel.clearHostApp()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                        .disabled(mihomoViewModel.isSelectingHostApp)
+                    }
+
+                    Button("选择应用…") {
+                        mihomoViewModel.selectHostApp()
+                    }
+                    .adaptiveGlassProminentButtonStyle()
+                    .disabled(mihomoViewModel.isSelectingHostApp)
+                }
+            }
+            .padding(DesignSystem.Spacing.standard)
+        } label: {
+            SectionHeader(
+                title: "Mihomo 关联应用",
+                icon: "cube.fill",
+                iconColor: .purple,
+                description: "内核替换功能依赖的宿主应用"
             )
         }
     }
@@ -221,6 +282,11 @@ struct SettingsView: View {
 
         // 应用 API Keys
         data.apiKeys.apply(to: apiKeyManager)
+
+        // 应用 Mihomo 配置
+        MihomoConfigService().saveConfig(data.mihomoConfig)
+        mihomoViewModel.loadConfig()
+        mihomoViewModel.refreshStatus()
 
         // 刷新 NetworkMonitor 中的场景
         networkMonitor.updateScenes(data.appControlScenes)

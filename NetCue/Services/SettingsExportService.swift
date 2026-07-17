@@ -18,7 +18,7 @@ import UniformTypeIdentifiers
 ///
 /// ## 功能
 /// - 导出当前所有配置到 .netcue 文件
-/// - 从 .netcue 文件导入配置
+/// - 从 .netcue 文件解析配置（不负责写入，写入时机由调用方决定）
 ///
 /// ## 技术实现
 /// - 文件格式：JSON（内部） + .netcue（扩展名）
@@ -83,12 +83,16 @@ final class SettingsExportService {
 
     // MARK: - Import
 
-    /// 从用户选择的文件导入设置
+    /// 从用户选择的文件读取并解析设置
     ///
     /// ## 流程
     /// 1. 显示 NSOpenPanel 让用户选择文件
     /// 2. 读取并反序列化 JSON
-    /// 3. 应用配置到各个存储
+    ///
+    /// ## 说明
+    /// 本方法只负责解析，**不会写入任何存储**。是否应用、何时应用
+    /// 由调用方决定（通常先弹窗让用户确认，确认后再调用方自行落盘），
+    /// 避免用户在确认弹窗里点"取消"后配置已经被静默覆盖。
     ///
     /// - Returns: 导入结果
     func importSettings() async -> ImportResult {
@@ -114,10 +118,7 @@ final class SettingsExportService {
                 AppLogger.warning("⚠️ 导入文件版本较新: \(importData.version) > \(NetCueExportData.currentVersion)")
             }
 
-            // 4. 应用配置
-            applyImportedSettings(importData)
-
-            AppLogger.info("✅ 设置导入成功: \(importData.appControlScenes.count) 个应用场景, \(importData.dnsControlScenes.count) 个 DNS 场景")
+            AppLogger.info("✅ 设置文件解析成功: \(importData.appControlScenes.count) 个应用场景, \(importData.dnsControlScenes.count) 个 DNS 场景")
             return .success(data: importData)
 
         } catch {
@@ -133,28 +134,16 @@ final class SettingsExportService {
         let appScenes = SceneStorage.loadScenes()
         let dnsScenes = DNSSceneStorage.shared.loadScenes()
         let apiKeys = APIKeyExportData(from: APIKeyManager.shared)
+        let mihomoConfig = MihomoConfigService().loadConfig()
 
         AppLogger.debug("收集配置: \(appScenes.count) 个应用场景, \(dnsScenes.count) 个 DNS 场景")
 
         return NetCueExportData(
             appControlScenes: appScenes,
             dnsControlScenes: dnsScenes,
-            apiKeys: apiKeys
+            apiKeys: apiKeys,
+            mihomoConfig: mihomoConfig
         )
-    }
-
-    /// 应用导入的配置
-    private func applyImportedSettings(_ data: NetCueExportData) {
-        // 应用应用控制场景
-        SceneStorage.saveScenes(data.appControlScenes)
-
-        // 应用 DNS 控制场景
-        DNSSceneStorage.shared.saveScenes(data.dnsControlScenes)
-
-        // 应用 API Keys
-        data.apiKeys.apply(to: APIKeyManager.shared)
-
-        AppLogger.info("配置已应用")
     }
 
     // MARK: - Private Methods - Panels

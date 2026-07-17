@@ -8,7 +8,13 @@
 import Foundation
 import AppKit
 
-/// Mihomo 进程服务
+/// Mihomo 关联应用的进程服务
+///
+/// ## 设计说明
+/// 不写死任何具体客户端的 bundle identifier，所有方法都接收调用方
+/// 传入的 `bundleIdentifier`/`displayName`（来自 `MihomoConfig` 中用户
+/// 关联的应用）。若两者均为空（尚未关联应用），则视为"无法判断运行状态"，
+/// 直接放行，不阻塞内核操作。
 class MihomoProcessService {
     private final class TerminationWaitState: @unchecked Sendable {
         private let lock = NSLock()
@@ -47,70 +53,49 @@ class MihomoProcessService {
         }
     }
 
-    private let clashXMetaBundleIdentifier = "com.metacubex.ClashX.meta"
-    private let clashXMetaDisplayName = "ClashX Meta"
-
     // MARK: - 进程检测
 
-    /// 检查 ClashX.Meta 是否正在运行
-    /// - Returns: true 表示正在运行，false 表示未运行
-    func isClashXMetaRunning() -> Bool {
-        AppLogger.debug("检查 ClashX.Meta 运行状态")
-        let isRunning = findRunningClashXMeta() != nil
+    /// 检查关联应用是否正在运行
+    /// - Parameters:
+    ///   - bundleIdentifier: 关联应用的 Bundle Identifier
+    ///   - displayName: 关联应用的显示名称
+    /// - Returns: true 表示正在运行，false 表示未运行或尚未关联应用
+    func isHostAppRunning(bundleIdentifier: String, displayName: String) -> Bool {
+        guard !bundleIdentifier.isEmpty || !displayName.isEmpty else {
+            return false
+        }
+
+        AppLogger.debug("检查关联应用运行状态: \(displayName)")
+        let isRunning = findRunningHostApp(bundleIdentifier: bundleIdentifier, displayName: displayName) != nil
 
         if isRunning {
-            AppLogger.info("ClashX.Meta 正在运行")
+            AppLogger.info("关联应用正在运行: \(displayName)")
         } else {
-            AppLogger.debug("ClashX.Meta 未运行")
+            AppLogger.debug("关联应用未运行: \(displayName)")
         }
 
         return isRunning
     }
 
-    /// 检查是否可以执行需要 sudo 的操作
-    /// - Returns: true 表示 ClashX.Meta 未运行，可以执行操作
-    /// - Throws: MihomoError.clashXMetaIsRunning 如果应用正在运行
-    func checkCanPerformSudoOperations() throws {
-        AppLogger.debug("检查是否可以执行 sudo 操作")
-        if isClashXMetaRunning() {
-            AppLogger.warning("ClashX.Meta 正在运行，无法执行 sudo 操作")
-            throw MihomoError.clashXMetaIsRunning
-        }
-        AppLogger.debug("可以执行 sudo 操作")
-    }
 
     // MARK: - 应用控制
 
-    /// 打开 ClashX.Meta 应用
-    func openClashXMeta() {
-        let appPath = MihomoPaths.clashXMetaApp
-        AppLogger.info("尝试打开 ClashX.Meta - 路径: \(appPath)")
-
-        NSWorkspace.shared.openApplication(
-            at: URL(fileURLWithPath: appPath),
-            configuration: NSWorkspace.OpenConfiguration()
-        ) { _, error in
-            if let error = error {
-                AppLogger.error("打开 ClashX.Meta 失败", error: error)
-            } else {
-                AppLogger.info("ClashX.Meta 已成功打开")
-            }
-        }
-    }
-
-    /// 请求用户退出 ClashX.Meta
+    /// 请求用户退出关联应用
     ///
     /// 使用 async/await 模式替代阻塞式 `runModal()`
     ///
+    /// - Parameters:
+    ///   - bundleIdentifier: 关联应用的 Bundle Identifier
+    ///   - displayName: 关联应用的显示名称
     /// - Returns: 用户选择的操作（退出或取消）
-    func requestQuitClashXMeta() async -> Bool {
-        AppLogger.info("弹出对话框请求退出 ClashX.Meta")
+    func requestQuitHostApp(bundleIdentifier: String, displayName: String) async -> Bool {
+        AppLogger.info("弹出对话框请求退出关联应用: \(displayName)")
 
         let alert = NSAlert()
-        alert.messageText = "ClashX.Meta 正在运行"
-        alert.informativeText = "执行此操作需要先退出 ClashX.Meta，是否继续？"
+        alert.messageText = "\(displayName) 正在运行"
+        alert.informativeText = "执行此操作需要先退出 \(displayName)，是否继续？"
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "退出 ClashX.Meta")
+        alert.addButton(withTitle: "退出 \(displayName)")
         alert.addButton(withTitle: "取消")
 
         // 使用 withCheckedContinuation 将 runModal 包装为 async
@@ -124,36 +109,43 @@ class MihomoProcessService {
 
         if response == .alertFirstButtonReturn {
             // 用户选择退出
-            AppLogger.info("用户选择退出 ClashX.Meta")
-            quitClashXMeta()
+            AppLogger.info("用户选择退出关联应用: \(displayName)")
+            quitHostApp(bundleIdentifier: bundleIdentifier, displayName: displayName)
             return true
         } else {
             // 用户取消
-            AppLogger.info("用户取消退出 ClashX.Meta")
+            AppLogger.info("用户取消退出关联应用: \(displayName)")
             return false
         }
     }
 
-    /// 退出 ClashX.Meta 应用
-    private func quitClashXMeta() {
-        AppLogger.info("尝试退出 ClashX.Meta")
+    /// 退出关联应用
+    private func quitHostApp(bundleIdentifier: String, displayName: String) {
+        AppLogger.info("尝试退出关联应用: \(displayName)")
 
-        if let clashApp = findRunningClashXMeta() {
-            AppLogger.debug("找到 ClashX.Meta 进程，正在终止")
-            clashApp.terminate()
-            AppLogger.info("已发送退出信号到 ClashX.Meta")
+        if let app = findRunningHostApp(bundleIdentifier: bundleIdentifier, displayName: displayName) {
+            AppLogger.debug("找到关联应用进程，正在终止")
+            app.terminate()
+            AppLogger.info("已发送退出信号: \(displayName)")
         } else {
-            AppLogger.warning("未找到正在运行的 ClashX.Meta 进程")
+            AppLogger.warning("未找到正在运行的关联应用进程: \(displayName)")
         }
     }
 
     // MARK: - 事件驱动等待
 
-    /// 等待 ClashX.Meta 退出，使用应用终止通知替代轮询
-    /// - Parameter maxWaitTime: 最大等待时间（秒）
+    /// 等待关联应用退出，使用应用终止通知替代轮询
+    /// - Parameters:
+    ///   - bundleIdentifier: 关联应用的 Bundle Identifier
+    ///   - displayName: 关联应用的显示名称
+    ///   - maxWaitTime: 最大等待时间（秒）
     /// - Throws: MihomoError.appQuitTimeout
-    func waitForClashXMetaToQuit(maxWaitTime: TimeInterval = 10.0) async throws {
-        guard let runningApp = findRunningClashXMeta() else {
+    func waitForHostAppToQuit(
+        bundleIdentifier: String,
+        displayName: String,
+        maxWaitTime: TimeInterval = 10.0
+    ) async throws {
+        guard let runningApp = findRunningHostApp(bundleIdentifier: bundleIdentifier, displayName: displayName) else {
             return
         }
 
@@ -161,7 +153,11 @@ class MihomoProcessService {
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
-                try await self.awaitTerminationNotification(for: processIdentifier)
+                try await self.awaitTerminationNotification(
+                    bundleIdentifier: bundleIdentifier,
+                    displayName: displayName,
+                    processIdentifier: processIdentifier
+                )
             }
 
             group.addTask {
@@ -179,7 +175,11 @@ class MihomoProcessService {
         }
     }
 
-    private func awaitTerminationNotification(for processIdentifier: pid_t) async throws {
+    private func awaitTerminationNotification(
+        bundleIdentifier: String,
+        displayName: String,
+        processIdentifier: pid_t
+    ) async throws {
         let workspaceNotificationCenter = NSWorkspace.shared.notificationCenter
         let waitState = TerminationWaitState(notificationCenter: workspaceNotificationCenter)
 
@@ -197,11 +197,11 @@ class MihomoProcessService {
                         return
                     }
 
-                    AppLogger.info("检测到 ClashX.Meta 已退出")
+                    AppLogger.info("检测到关联应用已退出: \(displayName)")
                     waitState.finish(.success(()))
                 }
 
-                if self.findRunningClashXMeta(processIdentifier: processIdentifier) == nil {
+                if self.findRunningHostApp(bundleIdentifier: bundleIdentifier, displayName: displayName, processIdentifier: processIdentifier) == nil {
                     waitState.finish(.success(()))
                 }
             }
@@ -212,10 +212,18 @@ class MihomoProcessService {
 
     // MARK: - Private Helpers
 
-    private func findRunningClashXMeta(processIdentifier: pid_t? = nil) -> NSRunningApplication? {
-        NSWorkspace.shared.runningApplications.first { app in
-            let matchesTarget = app.bundleIdentifier == clashXMetaBundleIdentifier ||
-                app.localizedName == clashXMetaDisplayName
+    private func findRunningHostApp(
+        bundleIdentifier: String,
+        displayName: String,
+        processIdentifier: pid_t? = nil
+    ) -> NSRunningApplication? {
+        guard !bundleIdentifier.isEmpty || !displayName.isEmpty else {
+            return nil
+        }
+
+        return NSWorkspace.shared.runningApplications.first { app in
+            let matchesTarget = (!bundleIdentifier.isEmpty && app.bundleIdentifier == bundleIdentifier) ||
+                (!displayName.isEmpty && app.localizedName == displayName)
 
             guard matchesTarget else {
                 return false
